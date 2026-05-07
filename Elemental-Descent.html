@@ -1,0 +1,529 @@
+<!DOCTYPE html> /* Made with Gemini by @lanzolanzi */
+<html lang="en">
+<head> 
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elemental Descent - Vivid & Dynamic</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        body, html {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Google Sans', sans-serif;
+            color: white;
+            cursor: none;
+        }
+
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+
+        /* UI Overlays */
+        #overlay {
+            position: absolute; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 100; transition: opacity 1s ease;
+            backdrop-filter: blur(15px);
+            cursor: auto;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            padding: 40px 60px;
+            text-align: center;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.7);
+        }
+
+        .btn-google {
+            padding: 14px 36px; font-size: 0.9rem;
+            background: #fff; color: #000;
+            border: none; border-radius: 50px;
+            cursor: pointer; font-weight: 700;
+            transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+            text-transform: uppercase; letter-spacing: 2px;
+            margin-top: 20px;
+        }
+
+        .btn-google:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(255, 255, 255, 0.5); background: #fff; }
+
+        #hud {
+            position: absolute; bottom: 40px; width: 100%;
+            display: flex; justify-content: center;
+            pointer-events: none; z-index: 10; opacity: 0;
+        }
+
+        .hud-glass {
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50px;
+            padding: 15px 30px;
+            display: flex; flex-direction: column; align-items: center;
+            box-shadow: 0 5px 25px rgba(0,0,0,0.5);
+        }
+
+        .progress-bar {
+            width: 250px; height: 6px; background: rgba(255,255,255,0.1);
+            border-radius: 3px; margin-top: 8px; overflow: hidden;
+        }
+
+        #progress-fill {
+            height: 100%; width: 0%;
+            background: #fff;
+            box-shadow: 0 0 15px #fff;
+            transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        #stage-header {
+            position: absolute; top: 30px;
+            width: 100%;
+            display: flex; justify-content: center;
+            z-index: 10; opacity: 0; pointer-events: none;
+        }
+
+        #stage-name { 
+            font-size: 1.6rem; font-weight: 700; letter-spacing: 16px;
+            text-transform: uppercase; color: #fff;
+            margin: 0; padding-left: 16px;
+            text-shadow: 0 0 15px rgba(255,255,255,0.5);
+        }
+
+        #cursor-wrapper {
+            position: fixed; pointer-events: none; z-index: 999;
+            transform: translate(-50%, -50%); display: none;
+        }
+
+        #custom-cursor {
+            width: 24px; height: 24px;
+            border: 2px solid white; border-radius: 50%;
+            box-shadow: 0 0 20px rgba(255,255,255,0.9);
+            mix-blend-mode: difference;
+        }
+
+        .cursor-particle {
+            position: absolute; top: 50%; left: 50%;
+            border-radius: 50%; pointer-events: none;
+            transform: translate(-50%, -50%);
+            filter: blur(2px);
+            mix-blend-mode: screen;
+        }
+
+        .collectible {
+            position: absolute; width: 80px; height: 80px;
+            z-index: 50; display: flex; justify-content: center; align-items: center;
+            font-size: 3.5rem; cursor: none;
+            filter: drop-shadow(0 0 25px rgba(255,255,255,0.6));
+            user-select: none;
+        }
+
+        #final-screen {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 200; flex-direction: column; justify-content: center; align-items: center;
+            cursor: auto;
+        }
+
+        .final-title {
+            font-size: 4rem; font-weight: 700; letter-spacing: -1px;
+            background: linear-gradient(45deg, #4285F4, #34A853, #FBBC05, #EA4335);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="cursor-wrapper">
+        <div id="custom-cursor"></div>
+    </div>
+
+    <div id="overlay">
+        <div class="glass-panel">
+            <h1 style="font-size: 2.8rem; margin: 0 0 30px 0; font-weight: 700; letter-spacing: -0.5px;">ELEMENTAL DESCENT</h1>
+            <button class="btn-google" id="start-btn">Start Experiment</button>
+        </div>
+    </div>
+
+    <div id="stage-header">
+        <div class="glass-panel" style="padding: 10px 30px; border-radius: 40px; background: rgba(255,255,255,0.08);">
+            <div id="stage-name">NATURE</div>
+        </div>
+    </div>
+
+    <div id="hud">
+        <div class="hud-glass">
+            <div style="font-size: 0.7rem; font-weight: 700; letter-spacing: 3px; color: #fff; margin-bottom: 5px;">COLLECTION PROGRESS</div>
+            <div class="progress-bar"><div id="progress-fill"></div></div>
+        </div>
+    </div>
+
+    <div id="final-screen">
+        <h1 class="final-title">SIMULATION CONCLUDED</h1>
+        <p style="letter-spacing: 2px; color: #aaa; margin-top: 10px; font-size: 1.1rem; font-weight: 500;">Grazie per aver partecipato!</p>
+        <button class="btn-google" style="margin-top: 40px;" onclick="location.reload()">Restart</button>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script>
+        const STAGES = [
+            { n: 10, name: "Nature", color: 0x00FF41, emoji: "🌿", type: "nature", bgHex: 0x001a05 }, // Neon Green
+            { n: 9, name: "Fire", color: 0xFF3D00, emoji: "🔥", type: "fire", bgHex: 0x210000 },    // Deep Orange Red
+            { n: 8, name: "Water", color: 0x00E5FF, emoji: "💧", type: "water", bgHex: 0x000a21 },   // Electric Cyan
+            { n: 7, name: "Air", color: 0xFFFFFF, emoji: "☁️", type: "air", bgHex: 0x0a141a },      // Pure White
+            { n: 6, name: "Rock", color: 0xFFAB40, emoji: "🪨", type: "rock", bgHex: 0x1a120a },    // Bright Amber
+            { n: 5, name: "Electro", color: 0xFFFF00, emoji: "⚡", type: "electric", bgHex: 0x212100 }, // Pure Yellow
+            { n: 4, name: "Sand", color: 0xFFD600, emoji: "🏜️", type: "sand", bgHex: 0x1a1a00 },    // Golden
+            { n: 3, name: "Ice", color: 0x00FFFF, emoji: "❄️", type: "ice", bgHex: 0x001421 },      // Cyan Ice
+            { n: 2, name: "Space", color: 0xAA00FF, emoji: "🌠", type: "space", bgHex: 0x1a0021 },   // Neon Purple
+            { n: 1, name: "Light", color: 0xFFFFFF, emoji: "✨", type: "light", bgHex: 0x212121 }    // Neutral Grey-Black
+        ];
+
+        let currentIdx = 0, collected = 0, isStarted = false;
+        const goal = 5;
+
+        let realMouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+        let virtualMouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+        let mouseVel = { x: 0, y: 0 };
+        let isOverNumber = false;
+        let lightAnimationActive = false;
+
+        let scene, camera, renderer, mouseVec = new THREE.Vector2(-10, -10);
+        let particles;
+        let clock = new THREE.Clock();
+        let glowTexture;
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000000);
+            
+            camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 24; 
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            glowTexture = createGlowTexture();
+            setupStage();
+            animate();
+        }
+
+        function createGlowTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+            gradient.addColorStop(0, 'rgba(255,255,255,1)');
+            gradient.addColorStop(0.3, 'rgba(255,255,255,0.8)');
+            gradient.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 64, 64);
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function createNumberGeometry(num) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 512; canvas.height = 512;
+            ctx.fillStyle = 'black'; ctx.fillRect(0,0,512,512);
+            ctx.fillStyle = 'white'; ctx.font = 'bold 380px Google Sans';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(num, 256, 256);
+
+            const data = ctx.getImageData(0, 0, 512, 512).data;
+            const points = [];
+            const step = 2;
+            const scaleFactor = 14; 
+            
+            for (let y = 0; y < 512; y += step) {
+                for (let x = 0; x < 512; x += step) {
+                    if (data[(y * 512 + x) * 4] > 120) {
+                        points.push(new THREE.Vector3((x/512-0.5)*scaleFactor, (0.5-y/512)*scaleFactor, 0));
+                    }
+                }
+            }
+            const geo = new THREE.BufferGeometry().setFromPoints(points);
+            const count = points.length;
+            geo.setAttribute('velocity', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+            geo.setAttribute('randomness', new THREE.BufferAttribute(new Float32Array(count), 1).copyArray(new Float32Array(count).map(() => Math.random())));
+            return geo;
+        }
+
+        function setupStage() {
+            if (particles) scene.remove(particles);
+
+            const stage = STAGES[currentIdx];
+            const targetColor = new THREE.Color(stage.bgHex);
+            gsap.to(scene.background, {
+                r: targetColor.r, g: targetColor.g, b: targetColor.b,
+                duration: 1.5, ease: "power2.inOut"
+            });
+
+            const geometry = createNumberGeometry(stage.n);
+            const mat = new THREE.PointsMaterial({
+                size: 0.12, 
+                color: stage.color, 
+                map: glowTexture,
+                transparent: true, 
+                opacity: 1.0, 
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+
+            particles = new THREE.Points(geometry, mat);
+            particles.userData = { 
+                origin: geometry.attributes.position.array.slice(),
+                type: stage.type
+            };
+            scene.add(particles);
+
+            const cursor = document.getElementById('custom-cursor');
+            cursor.style.borderColor = stage.type === 'ice' ? '#00FFFF' : 'white';
+            cursor.style.boxShadow = `0 0 20px ${new THREE.Color(stage.color).getStyle()}`;
+            lightAnimationActive = false;
+        }
+
+        function createCursorParticle(type) {
+            const p = document.createElement('div');
+            p.className = 'cursor-particle';
+            const size = Math.random() * 12 + 6;
+            p.style.width = size + 'px'; p.style.height = size + 'px';
+            
+            let color, xDir, yDir;
+            if (type === 'fire') {
+                color = `hsl(${Math.random() * 30 + 10}, 100%, 60%)`;
+                xDir = (Math.random() - 0.5) * 40; yDir = -Math.random() * 60 - 30;
+                p.style.boxShadow = `0 0 10px ${color}`;
+            } else if (type === 'water') {
+                color = '#00E5FF';
+                xDir = (Math.random() - 0.5) * 20; yDir = Math.random() * 40 + 20;
+            } else if (type === 'electric') {
+                color = '#FFFF00';
+                xDir = (Math.random() - 0.5) * 100; yDir = (Math.random() - 0.5) * 100;
+                p.style.filter = 'blur(0px)'; p.style.borderRadius = '0%';
+            }
+
+            p.style.backgroundColor = color;
+            document.getElementById('cursor-wrapper').appendChild(p);
+
+            gsap.to(p, {
+                x: xDir, y: yDir,
+                opacity: 0, scale: 0.1, rotation: Math.random() * 360,
+                duration: Math.random() * 0.5 + 0.4,
+                ease: type === 'electric' ? "steps(3)" : "power2.out",
+                onComplete: () => p.remove()
+            });
+        }
+
+        function handleLightEffect() {
+            if (lightAnimationActive) return;
+            lightAnimationActive = true;
+            const cursor = document.getElementById('custom-cursor');
+            
+            const tl = gsap.timeline({ onComplete: () => { lightAnimationActive = false; }});
+            tl.to(cursor, { boxShadow: '0 0 80px 30px rgba(255,255,255,1)', background: 'white', duration: 0.3 })
+              .to(cursor, { duration: 1.2 }) 
+              .to(cursor, { opacity: 0, duration: 0.05, repeat: 7, yoyo: true, ease: "none" }) 
+              .to(cursor, { opacity: 1, boxShadow: '0 0 20px rgba(255,255,255,0.9)', background: 'transparent', duration: 0.2 });
+        }
+
+        function updateMousePhysics() {
+            const type = STAGES[currentIdx].type;
+            const cursorWrapper = document.getElementById('cursor-wrapper');
+            
+            if (type === 'ice') {
+                let friction = 0.975, power = 0.0025;   
+                mouseVel.x += (realMouse.x - virtualMouse.x) * power;
+                mouseVel.y += (realMouse.y - virtualMouse.y) * power;
+                mouseVel.x *= friction; mouseVel.y *= friction;
+
+                if (virtualMouse.x < 10 || virtualMouse.x > window.innerWidth - 10) mouseVel.x *= -0.5;
+                if (virtualMouse.y < 10 || virtualMouse.y > window.innerHeight - 10) mouseVel.y *= -0.5;
+            } else {
+                let lerpFactor = 0.22;
+                mouseVel.x = (realMouse.x - virtualMouse.x) * lerpFactor;
+                mouseVel.y = (realMouse.y - virtualMouse.y) * lerpFactor;
+            }
+
+            virtualMouse.x += mouseVel.x; virtualMouse.y += mouseVel.y;
+            virtualMouse.x = Math.max(0, Math.min(window.innerWidth, virtualMouse.x));
+            virtualMouse.y = Math.max(0, Math.min(window.innerHeight, virtualMouse.y));
+
+            cursorWrapper.style.left = virtualMouse.x + 'px';
+            cursorWrapper.style.top = virtualMouse.y + 'px';
+
+            mouseVec.x = (virtualMouse.x / window.innerWidth) * 2 - 1;
+            mouseVec.y = -(virtualMouse.y / window.innerHeight) * 2 + 1;
+
+            if (isOverNumber) {
+                if (type === 'fire') createCursorParticle('fire');
+                if (type === 'water') createCursorParticle('water');
+                if (type === 'electric' && Math.random() > 0.4) createCursorParticle('electric');
+                if (type === 'light') handleLightEffect();
+            }
+
+            checkCollectibleCollisions();
+        }
+
+        function checkCollectibleCollisions() {
+            const items = document.querySelectorAll('.collectible');
+            items.forEach(div => {
+                const rect = div.getBoundingClientRect();
+                const dx = virtualMouse.x - (rect.left + rect.width / 2);
+                const dy = virtualMouse.y - (rect.top + rect.height / 2);
+                if (Math.sqrt(dx*dx + dy*dy) < 55) collect(div);
+            });
+        }
+
+        function collect(div) {
+            if (div.dataset.collected === "true") return;
+            div.dataset.collected = "true";
+            collected++;
+            document.getElementById('progress-fill').style.width = (collected/goal)*100 + '%';
+            gsap.to(div, { scale: 0, opacity: 0, rotation: 180, duration: 0.3, onComplete: () => div.remove() });
+            if (collected >= goal) transition();
+            else spawnCollectible();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updateMousePhysics();
+            
+            const elapsed = clock.getElapsedTime();
+            if (particles) {
+                const pos = particles.geometry.attributes.position.array;
+                const vel = particles.geometry.attributes.velocity.array;
+                const rand = particles.geometry.attributes.randomness.array;
+                const orig = particles.userData.origin;
+                const type = particles.userData.type;
+
+                let pointsInside = 0;
+
+                for (let i = 0; i < pos.length; i += 3) {
+                    const idx = i / 3;
+                    let friction = 0.92, spring = 0.08, gravity = 0, noise = 0, vortex = 0;
+
+                    switch(type) {
+                        case 'nature': noise = Math.sin(elapsed * 2 + rand[idx] * 10) * 0.005; spring = 0.05; break;
+                        case 'fire': gravity = -0.015 - rand[idx] * 0.02; noise = (Math.random() - 0.5) * 0.04; friction = 0.9; break;
+                        case 'water': friction = 0.85; spring = 0.03; pos[i] += Math.sin(elapsed * 2 + pos[i+1]) * 0.008; vortex = 0.18; break;
+                        case 'air': friction = 0.95; spring = 0.02; noise = Math.sin(elapsed + orig[i]) * 0.01; vortex = 0.12; break;
+                        case 'rock': gravity = 0.02; spring = 0.2; friction = 0.8; break;
+                        case 'electric': friction = 0.4; spring = 0.3; if (Math.random() > 0.99) vel[i] += (Math.random()-0.5) * 6; break;
+                        case 'ice': friction = 0.98; spring = 0.08; break;
+                        case 'space': friction = 0.99; spring = 0.005; noise = (Math.random() - 0.5) * 0.003; break;
+                        case 'light': friction = 0.7; spring = 0.4; noise = (Math.random() - 0.5) * 0.02; break;
+                    }
+
+                    vel[i] += (orig[i] - pos[i]) * spring;
+                    vel[i+1] += (orig[i+1] - pos[i+1]) * spring;
+                    vel[i+2] += (orig[i+2] - pos[i+2]) * spring;
+                    vel[i+1] -= gravity;
+
+                    const dx = pos[i] - (mouseVec.x * 14);
+                    const dy = pos[i+1] - (mouseVec.y * 9);
+                    const distSq = dx*dx + dy*dy;
+                    
+                    if(distSq < 0.8) {
+                        pointsInside++;
+                        const force = (0.8 - distSq) * 0.4;
+                        vel[i] += dx * force; vel[i+1] += dy * force;
+                        if (vortex > 0) {
+                            vel[i] -= dy * force * vortex;
+                            vel[i+1] += dx * force * vortex;
+                        }
+                    }
+
+                    pos[i] += (vel[i] *= friction) + noise;
+                    pos[i+1] += (vel[i+1] *= friction) + noise;
+                    pos[i+2] += (vel[i+2] *= friction);
+                }
+                
+                isOverNumber = pointsInside > 30;
+                particles.geometry.attributes.position.needsUpdate = true;
+            }
+            renderer.render(scene, camera);
+        }
+
+        function spawnCollectible() {
+            if (!isStarted) return;
+            const div = document.createElement('div');
+            div.className = 'collectible';
+            div.innerHTML = STAGES[currentIdx].emoji;
+            div.style.left = Math.random() * 70 + 15 + '%';
+            div.style.top = Math.random() * 40 + 30 + '%'; 
+            document.body.appendChild(div);
+            gsap.from(div, { scale: 0, rotate: -25, duration: 0.6, ease: "back.out(2.5)" });
+        }
+
+        function transition() {
+            collected = 0; currentIdx++;
+            document.getElementById('progress-fill').style.width = '0%';
+            document.querySelectorAll('.collectible').forEach(c => c.remove());
+
+            if (currentIdx < STAGES.length) {
+                const tl = gsap.timeline();
+                
+                // Random camera effect for transition
+                const transitions = [
+                    { x: 0, y: 0, z: 5, rot: 0 },         // Zoom In
+                    { x: 50, y: 0, z: 24, rot: 0 },        // Slide Right
+                    { x: 0, y: 0, z: 24, rot: Math.PI },  // Rotation
+                    { x: 0, y: 30, z: 24, rot: 0 },        // Slide Up
+                    { x: -50, y: -20, z: 10, rot: 0.5 }    // Diagonal
+                ];
+                const effect = transitions[Math.floor(Math.random() * transitions.length)];
+
+                tl.to(camera.position, { x: effect.x, y: effect.y, z: effect.z, duration: 0.8, ease: "power2.inOut" })
+                  .to(camera.rotation, { z: effect.rot, duration: 0.8, ease: "power2.inOut" }, 0)
+                  .add(() => {
+                        setupStage();
+                        document.getElementById('stage-name').innerText = STAGES[currentIdx].name;
+                  })
+                  .to(camera.position, { x: 0, y: 0, z: 24, duration: 1.2, ease: "expo.out" })
+                  .to(camera.rotation, { z: 0, duration: 1.2, ease: "expo.out" }, "-=1.2")
+                  .add(() => {
+                        setTimeout(spawnCollectible, 200);
+                  });
+
+            } else {
+                isStarted = false;
+                gsap.to(['#hud', '#stage-header', '#cursor-wrapper'], { opacity: 0, duration: 1 });
+                setTimeout(() => {
+                    document.getElementById('final-screen').style.display = 'flex';
+                    gsap.from('.final-title', { opacity: 0, scale: 0.8, duration: 1.5, ease: "elastic.out(1, 0.5)" });
+                }, 800);
+            }
+        }
+
+        window.addEventListener('mousemove', e => {
+            realMouse.x = e.clientX; realMouse.y = e.clientY;
+        });
+
+        document.getElementById('start-btn').onclick = () => {
+            gsap.to('#overlay', { opacity: 0, duration: 0.6, onComplete: () => {
+                document.getElementById('overlay').style.display = 'none';
+                document.getElementById('cursor-wrapper').style.display = 'block';
+                gsap.to(['#hud', '#stage-header'], { opacity: 1, duration: 1 });
+                isStarted = true;
+                spawnCollectible();
+            }});
+        };
+
+        window.onload = init;
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
